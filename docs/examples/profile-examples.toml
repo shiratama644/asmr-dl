@@ -1,0 +1,79 @@
+# asmr-dl プロファイル例（examples/profile-examples.toml）
+#
+# 本ファイルは「よくあるプロファイル追加例」の参考用。
+# 実際の設定は ~/.config/asmr-dl/config.toml を編集すること。
+#
+# ルール（config.rs / arch/profiles.md）:
+#   - 判定は上から順。最初に一致したプロファイルが採用される
+#   - generic は常に末尾（Config::normalize が強制）。generic より前に挿入すれば優先される
+#   - cookies は絶対パスまたは ~ 展開
+#   - url_regex は正規表現、domains は完全一致またはサフィックス一致
+
+# ── YouTube（ASMR 動画・サビアン等）────────────────────────────
+# 既定値とほぼ同じ。--js-runtimes node + yt-dlp-ejs で JS チャレンジに対応。
+[[profiles]]
+id = "youtube"
+domains = ["youtube.com", "youtu.be"]
+args = [
+    "--no-playlist",
+    "--no-mtime",
+    "--js-runtimes", "node",
+    "--remote-components", "ejs:github",
+]
+audio = { bitrate = 251, quality = "best", copy_if_opus = true }
+
+# ── ニコニコ（niconico）────────────────────────────────────────
+# cookies はログイン後。ASMR の一部動画はログイン必須。
+[[profiles]]
+id = "niconico"
+domains = ["nicosecure.com", "niconico.jp", "nicovideo.jp"]
+cookies = "~/.config/asmr-dl/nico-cookies.txt"
+audio = { bitrate = 192 }
+
+# ── X / Twitter（DM・スレッド内動画）────────────────────────────
+# cookies は必須。ID は x.com / twitter.com。
+[[profiles]]
+id = "x"
+domains = ["x.com", "twitter.com"]
+cookies = "~/.config/asmr-dl/x-cookies.txt"
+audio = { bitrate = 192 }
+
+# ── TikTok（ASMR 短视频）────────────────────────────────────────
+# cookies は任意。region 制限がある場合がある。
+[[profiles]]
+id = "tiktok"
+domains = ["tiktok.com"]
+audio = { bitrate = 192 }
+
+# ── 個人配信サイト（例: 某 ASMR 掲示板）─────────────────────────
+# 自前の cookies を使う例。url_regex で特定パターンに絞ることも可能。
+[[profiles]]
+id = "my-asmr-site"
+url_regex = "(?i)example\\.com/asmr/\\d+"
+cookies = "~/.config/asmr-dl/my-site-cookies.txt"
+audio = { bitrate = 256, normalize = true }
+
+# ── 任意の m3u8 直リンク（ffmpeg 直接取得）─────────────────────
+# 既定の hls-direct と同じ。frags = 8 で断続的な DL にも耐える。
+[[profiles]]
+id = "hls-direct"
+url_regex = "(?i)\\.(m3u8|mpd)(\\?|#|$)"
+backend = "ffmpeg"
+args = ["-loglevel", "error"]
+audio = { bitrate = 192 }
+
+# ── 直接リンク（mp3 / m4a / ogg / flac）────────────────────────
+# ffmpeg -c:a copy で無劣化コピー。
+[[profiles]]
+id = "file-direct"
+url_regex = "(?i)\\.(mp3|m4a|aac|ogg|opus|flac|wav)(\\?|#|$)"
+backend = "ffmpeg"
+args = ["-loglevel", "error"]
+audio = { bitrate = 192, copy_if_opus = true, embed_metadata = false }
+
+# ── generic（フォールバック・必ず末尾）─────────────────────────
+# 上記に全て一致しない URL はここに落ちる。
+[[profiles]]
+id = "generic"
+backend = "auto"
+audio = { bitrate = 192 }

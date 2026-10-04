@@ -1,0 +1,203 @@
+# ============================================================
+#  asmr-dl 設定ファイル
+#  場所: ~/.config/asmr-dl/config.toml (初回起動時に自動生成)
+#  "~" はホームディレクトリに展開されます
+# ============================================================
+
+# 変換後の .opus を保存する場所
+#   termux-setup-storage 済みなら Android の「Music/ASMR」に保存され、
+#   音楽プレイヤーアプリからそのまま再生できます
+output_dir = "~/storage/shared/Music/ASMR"
+
+# 作業用一時フォルダ (Termux 内部ストレージ。共有ストレージより高速)
+temp_dir = "~/.cache/asmr-dl"
+
+# 同時に処理するジョブ数 (S24 Ultra なら 2〜3 で余裕。回線次第)
+max_concurrent = 2
+
+# 外部コマンド (PATH 上にあれば名前だけでOK)
+ytdlp_path = "yt-dlp"
+ffmpeg_path = "ffmpeg"
+ffprobe_path = "ffprobe"
+
+# yt-dlp が失敗したとき ffmpeg で直接取得を試す (backend = "auto" のときのみ)
+fallback_to_ffmpeg = true
+
+# 一時ファイルを残す (デバッグ用)
+keep_temp = false
+
+# Termux 連携
+wake_lock = true      # 起動中は termux-wake-lock (画面OFFでも止まりにくくする)
+media_scan = true     # 完了後 termux-media-scan (要 Termux:API アプリ + pkg termux-api)
+notify = true         # 完了/失敗を termux-notification で通知 (同上)
+mouse = true          # タップでジョブ選択・スワイプでスクロール
+
+# Ctrl+B / b で切り替えるビットレート (kbps)
+bitrate_presets = [64, 96, 128, 160, 192, 256]
+
+# ------------------------------------------------------------
+#  プロファイル
+#  上から順に判定し、最初にマッチしたものを使用します。
+#  name = "generic" はどれにもマッチしなかったときのフォールバック。
+#
+#  主な項目:
+#    domains        … ホスト名のサフィックス一致 (例 "youtube.com" は m.youtube.com にも一致)
+#    url_regex      … URL 全体への正規表現 (domains より先に評価)
+#    backend        … "auto" (yt-dlp→失敗時ffmpeg) / "ytdlp" / "ffmpeg" (URLを直接ffmpegへ)
+#    format         … yt-dlp の -f   format_sort … yt-dlp の -S
+#    referer / user_agent / headers / cookies (Netscape形式 cookies.txt)
+#    concurrent_fragments … HLS/DASH の並列フラグメント数 (-N)
+#    filename       … yt-dlp の出力テンプレート ("/" でサブフォルダ可)
+#    subdir         … output_dir 以下のサブフォルダ
+#    ytdlp_args     … yt-dlp に追加で渡す引数
+#  [profiles.audio]
+#    bitrate_kbps   … Opus ビットレート。バイノーラルASMRは 128〜160 推奨
+#    channels       … 0 = 元のまま (ステレオ/バイノーラルを維持)。1 = モノラル化
+#    copy_if_opus   … 元が Opus なら再エンコードせず無劣化コピー
+#    normalize      … loudnorm で音量を揃える (ASMRは小さい音が持ち味なので既定OFF)
+#    filter         … 追加の ffmpeg -af フィルタ (例 "highpass=f=20" で低域ノイズ除去)
+#    vbr            … "on" / "constrained" / "off"
+# ------------------------------------------------------------
+
+[[profiles]]
+name = "youtube"
+description = "YouTube / YouTube Music。Opus(251)を優先し無劣化コピー"
+domains = ["youtube.com", "youtu.be", "youtube-nocookie.com"]
+format = "251/ba[acodec=opus]/ba/b"
+subdir = "YouTube"
+filename = "%(channel,uploader|Unknown).80B/%(title).150B [%(id)s].%(ext)s"
+write_thumbnail = true
+# YouTube は JS ランタイムが必要 (Termux: pkg install nodejs)
+ytdlp_args = ["--js-runtimes", "node", "--remote-components", "ejs:github"]
+[profiles.audio]
+bitrate_kbps = 160
+copy_if_opus = true
+
+[[profiles]]
+name = "niconico"
+description = "ニコニコ動画 (HLS)。プレミアム音質は cookies を設定"
+domains = ["nicovideo.jp", "nico.ms"]
+format = "ba/b"
+subdir = "niconico"
+filename = "%(uploader|Unknown).80B/%(title).150B [%(id)s].%(ext)s"
+concurrent_fragments = 4
+write_thumbnail = true
+# cookies = "~/cookies/nicovideo.txt"
+[profiles.audio]
+bitrate_kbps = 128
+
+[[profiles]]
+name = "bilibili"
+description = "bilibili (DASH音声トラックのみ取得)"
+domains = ["bilibili.com", "b23.tv"]
+referer = "https://www.bilibili.com/"
+format = "ba/b"
+subdir = "bilibili"
+filename = "%(uploader|Unknown).80B/%(title).150B [%(id)s].%(ext)s"
+write_thumbnail = true
+[profiles.audio]
+bitrate_kbps = 128
+
+[[profiles]]
+name = "twitch"
+description = "Twitch アーカイブ (長時間ASMR配信)。audio_only を優先して通信量を節約"
+domains = ["twitch.tv"]
+format = "ba/audio_only/b"
+format_sort = "+res"
+subdir = "Twitch"
+filename = "%(uploader|Unknown).80B/%(upload_date>%Y-%m-%d|)s %(title).120B [%(id)s].%(ext)s"
+concurrent_fragments = 8
+[profiles.audio]
+bitrate_kbps = 128
+
+[[profiles]]
+name = "soundcloud"
+description = "SoundCloud (ASMR音声作品)"
+domains = ["soundcloud.com"]
+format = "ba/b"
+subdir = "SoundCloud"
+filename = "%(uploader|Unknown).80B/%(title).150B [%(id)s].%(ext)s"
+write_thumbnail = true
+[profiles.audio]
+bitrate_kbps = 128
+copy_if_opus = true
+
+[[profiles]]
+name = "x"
+description = "X(Twitter) の動画/スペース。必要なら cookies を設定"
+domains = ["x.com", "twitter.com"]
+format = "ba/b"
+format_sort = "+res"
+subdir = "X"
+filename = "%(uploader_id|Unknown).60B/%(upload_date>%Y-%m-%d|)s %(title).100B [%(id)s].%(ext)s"
+concurrent_fragments = 4
+# cookies = "~/cookies/x.txt"
+[profiles.audio]
+bitrate_kbps = 128
+
+[[profiles]]
+name = "tiktok"
+description = "TikTok (ショートASMR)"
+domains = ["tiktok.com"]
+format = "ba/b"
+format_sort = "+res"
+subdir = "TikTok"
+filename = "%(uploader|Unknown).60B/%(title).100B [%(id)s].%(ext)s"
+[profiles.audio]
+bitrate_kbps = 96
+
+[[profiles]]
+name = "hls-direct"
+description = "m3u8/mpd を直接指定 (ブラウザの開発者ツール等で取得したURL)"
+url_regex = '(?i)\.(m3u8|mpd)(\?|#|$)'
+format = "ba/b"
+format_sort = "+res"
+subdir = "Stream"
+embed_metadata = false
+filename = "%(title).150B.%(ext)s"
+concurrent_fragments = 8
+# サイトによっては Referer/Origin が無いと 403 になります
+# referer = "https://example.com/"
+# headers = ["Origin: https://example.com"]
+[profiles.audio]
+bitrate_kbps = 128
+
+[[profiles]]
+name = "file-direct"
+description = "mp3/m4a/wav/flac/mp4 等のファイルURLを直接変換"
+url_regex = '(?i)\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|webm|mp4|m4v|mkv|mka|mov|ts)(\?|#|$)'
+subdir = "Files"
+embed_metadata = false   # 汎用抽出のタイトル(ファイル名)で元のタグを上書きしない
+filename = "%(title).150B.%(ext)s"
+[profiles.audio]
+bitrate_kbps = 128
+copy_if_opus = true
+
+# --- 独自サイト用テンプレート (コメントを外して編集) -------------
+# [[profiles]]
+# name = "my-asmr-site"
+# description = "Referer と Cookie が必要な ASMR 配信サイトの例"
+# domains = ["example-asmr.jp"]
+# backend = "auto"
+# referer = "https://example-asmr.jp/"
+# user_agent = "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36"
+# headers = ["Origin: https://example-asmr.jp"]
+# cookies = "~/cookies/example-asmr.txt"
+# playlist = true          # 作品ページ内の複数トラックをまとめて取得
+# split_chapters = true    # チャプター付き長尺をトラックごとに分割
+# subdir = "MySite"
+# [profiles.audio]
+# bitrate_kbps = 160
+# filter = "highpass=f=20"
+
+# --- フォールバック (必ず最後に置く) -------------------------------
+[[profiles]]
+name = "generic"
+description = "その他のサイト (yt-dlp の汎用抽出 → 失敗時 ffmpeg 直接)"
+format = "ba/b"
+subdir = "Other"
+filename = "%(title).150B [%(id)s].%(ext)s"
+concurrent_fragments = 4
+[profiles.audio]
+bitrate_kbps = 128
+copy_if_opus = true

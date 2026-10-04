@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(git status)",
+      "Bash(git branch*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git fetch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push origin*)",
+      "Bash(gh *)",
+      "Bash(cargo *)",
+      "Bash(rustfmt *)",
+      "Bash(rustup *)",
+      "Bash(python3 -c *)",
+      "Bash(python3 *)",
+      "Bash(sh -n *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(grep *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(which *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git reset --hard)",
+      "Bash(git clean -fd)",
+      "Bash(git rebase)",
+      "Bash(git push --force*)",
+      "Bash(git commit --amend)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/secrets/**)",
+      "Read(**/cookies*)"
+    ],
+    "defaultMode": "default"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --short; git branch --show-current; git log -5 --oneline"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .agent/hooks/pre_edit_guard.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .agent/hooks/post_edit_verify.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v cargo >/dev/null 2>&1; then cargo check --quiet 2>/dev/null || true; cargo test --quiet 2>/dev/null || true; else python3 -c \"import tomllib; tomllib.load(open('config.default.toml','rb'))\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

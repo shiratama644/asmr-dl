@@ -1,0 +1,29 @@
+[package]
+name = "asmr-dl"
+version = "0.1.0"
+edition = "2021"
+description = "ASMR向け: URLから動画/音声(HLS/m3u8・DASH等)を取得してOpusに変換するRatatui製TUI (Termux対応)"
+license = "MIT"
+
+[[bin]]
+name = "asmr-dl"
+path = "src/main.rs"
+
+[dependencies]
+# ratatui は crossterm を再エクスポートしているので crossterm を直接依存に入れない (バージョン不一致防止)
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "io-util", "fs"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+regex = "1"
+url = "2"
+unicode-width = "0.2"
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true
+panic = "unwind"

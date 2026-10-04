@@ -1,0 +1,7 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# ブラウザや YouTube アプリの「共有」→「Termux」で呼ばれるスクリプト
+# 置き場所: ~/bin/termux-url-opener (実行権限を付ける)
+#
+# 共有された URL をキューに入れた状態で asmr-dl が起動します。
+url="$1"
+exec asmr-dl "$url"
