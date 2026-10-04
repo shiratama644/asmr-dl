@@ -1,23 +1,59 @@
-//! 描画 (スマホ縦画面 = 幅 40〜60 桁程度でも崩れないレイアウト)
+//! 描画 (Catppuccin Mocha ベースのモダンテーマ / スマホ縦画面 40〜60 桁で崩れないレイアウト)
+//!
+//! デザイン方針:
+//! - ヘッダ・フッタは `BG_ALT` の全幅バー (アプリの「chrome」)
+//! - 角丸枠 (`BorderType::Rounded`) + 抑制された surface 階調
+//! - 状態色はパレットの 6 色 (accent 粉 / blue / teal / green / red / yellow)
+//! - 実行中ジョブはブレイル・スピナー (200ms tick 連動、決定論)
 
 use crate::app::{App, Mode};
 use crate::job::Status;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{
+    Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap,
+};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-const ACCENT: Color = Color::Rgb(255, 140, 200); // ASMR っぽいピンク
-const ACCENT2: Color = Color::Rgb(150, 200, 255);
-const DIM: Color = Color::DarkGray;
-const OK: Color = Color::Rgb(120, 220, 140);
-const ERR: Color = Color::Rgb(255, 110, 110);
-const WARN: Color = Color::Rgb(255, 200, 100);
+/// Catppuccin Mocha ベースのカラーパレット (ASMR 用のピンクアクセント)
+mod theme {
+    use ratatui::style::Color;
+
+    pub const BG: Color = Color::Rgb(30, 30, 46); // base (ポップアップの背景)
+    pub const BG_ALT: Color = Color::Rgb(24, 24, 37); // mantle (ヘッダ/フッタのバー)
+    pub const SURFACE: Color = Color::Rgb(49, 50, 68); // surface0 (チップ・バーの残)
+    pub const SURFACE_HI: Color = Color::Rgb(69, 71, 90); // surface1 (選択行)
+    pub const TEXT: Color = Color::Rgb(205, 214, 244); // text
+    pub const DIM: Color = Color::Rgb(166, 173, 200); // subtext0
+    pub const FAINT: Color = Color::Rgb(108, 112, 134); // overlay0
+    pub const ACCENT: Color = Color::Rgb(245, 194, 231); // pink
+    pub const BLUE: Color = Color::Rgb(137, 180, 250);
+    pub const TEAL: Color = Color::Rgb(148, 226, 213);
+    pub const GREEN: Color = Color::Rgb(166, 227, 161);
+    pub const RED: Color = Color::Rgb(243, 139, 168);
+    pub const YELLOW: Color = Color::Rgb(249, 226, 175);
+}
+use theme::*;
+
+/// 実行中ジョブ用のブレイル・スピナー (10 フレーム / 200ms tick ごとに 1 進み)
+const SPIN: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+fn spin(frame: u64) -> char {
+    SPIN[(frame % SPIN.len()) as usize]
+}
+
+/// スパン列の表示幅 (右端まで背景バーを伸ばすのに使う)
+fn spans_width(spans: &[Span<'static>]) -> usize {
+    spans.iter().map(|s| s.content.as_ref().width()).sum()
+}
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
+    if area.width < 20 || area.height < 8 {
+        return; // 極端に小さい端末では描画しない (レイアウト破綻防止)
+    }
     let log_visible = app.show_log && !app.jobs.is_empty() && area.height >= 24;
     let footer_h = if area.width < 70 { 2 } else { 1 };
 
@@ -52,38 +88,72 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 }
 
+// ───────────────────────── ヘッダ ─────────────────────────
+
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.tools;
-    let mut spans = vec![Span::styled(" ♪ ASMR→Opus ", Style::new().fg(Color::Black).bg(ACCENT).bold()), Span::raw(" ")];
+    let w = area.width as usize;
+    let bar = Style::new().bg(BG_ALT);
+    let mut s: Vec<Span> = vec![
+        Span::styled(" ♪ ASMR→Opus ", Style::new().fg(BG).bg(ACCENT).bold()),
+        Span::styled(" ", bar),
+    ];
+    let mark = |ok: bool| {
+        if ok {
+            Span::styled("✓", Style::new().fg(GREEN).bg(BG_ALT))
+        } else {
+            Span::styled("✗", Style::new().fg(RED).bg(BG_ALT))
+        }
+    };
     if !t.checked {
-        spans.push(Span::styled("ツール確認中…", Style::new().fg(DIM)));
+        s.push(Span::styled(" ツール確認中…", Style::new().fg(FAINT).bg(BG_ALT)));
+    } else if w < 60 {
+        // 縦画面ではツール名を短縮 (40 桁でも収まる)
+        s.push(Span::styled(" yt", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.ytdlp.is_some()));
+        s.push(Span::styled(" ff", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.ffmpeg.is_some() && t.ffprobe));
+        s.push(Span::styled(" opus", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.libopus));
     } else {
-        let mark = |ok: bool| if ok { Span::styled("✓", Style::new().fg(OK)) } else { Span::styled("✗", Style::new().fg(ERR)) };
-        spans.push(Span::raw("yt-dlp"));
-        spans.push(mark(t.ytdlp.is_some()));
-        spans.push(Span::raw(" ffmpeg"));
-        spans.push(mark(t.ffmpeg.is_some() && t.ffprobe));
-        spans.push(Span::raw(" opus"));
-        spans.push(mark(t.libopus));
+        s.push(Span::styled(" yt-dlp", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.ytdlp.is_some()));
+        s.push(Span::styled(" ffmpeg", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.ffmpeg.is_some() && t.ffprobe));
+        s.push(Span::styled(" opus", Style::new().fg(DIM).bg(BG_ALT)));
+        s.push(mark(t.libopus));
     }
     let running = app.running_count();
     let queued = app.jobs.iter().filter(|j| j.status == Status::Queued).count();
     if running + queued > 0 {
-        spans.push(Span::styled(format!("  ⇣{running} …{queued}"), Style::new().fg(ACCENT2)));
+        s.push(Span::styled(
+            format!("  ⇣{running} · {queued} 待機"),
+            Style::new().fg(BLUE).bg(BG_ALT).bold(),
+        ));
     }
-    f.render_widget(Paragraph::new(Line::from(spans)), area);
+    // 右端までバーの背景を伸ばす
+    let used = spans_width(&s);
+    if used < w {
+        s.push(Span::styled(" ".repeat(w - used), bar));
+    }
+    f.render_widget(Paragraph::new(Line::from(s)), area);
 }
+
+// ───────────────────────── 入力 ─────────────────────────
 
 fn draw_input(f: &mut Frame, app: &mut App, area: Rect) {
     app.hit.input = area;
     let focused = app.mode == Mode::Input;
-    let border = if focused { ACCENT } else { DIM };
+    let border = if focused { ACCENT } else { FAINT };
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(border))
         .title(Line::from(vec![
-            Span::styled(" URL ", Style::new().fg(border).bold()),
-            Span::styled(if focused { "Enter=追加 " } else { "i=入力 " }, Style::new().fg(DIM)),
+            Span::styled(" URL", Style::new().fg(if focused { ACCENT } else { DIM }).bold()),
+            Span::styled(
+                if focused { "  Enter=追加 · Esc=一覧" } else { "  i=入力" },
+                Style::new().fg(FAINT),
+            ),
         ]));
     let inner = block.inner(area);
 
@@ -92,11 +162,11 @@ fn draw_input(f: &mut Frame, app: &mut App, area: Rect) {
     let scroll = cur_w.saturating_sub(inner.width.saturating_sub(1));
 
     let content = if app.input.is_empty() && !focused {
-        Line::styled("URL を貼り付け (長押し→貼り付け)", Style::new().fg(DIM))
+        Line::styled("URL を貼り付け (長押し→貼り付け)", Style::new().fg(FAINT))
     } else if app.input.is_empty() {
-        Line::styled("https://… (共有テキストごと貼ってもOK)", Style::new().fg(DIM))
+        Line::styled("https://… (共有テキストごと貼ってもOK)", Style::new().fg(FAINT))
     } else {
-        Line::raw(app.input.as_str())
+        Line::styled(app.input.as_str(), Style::new().fg(TEXT))
     };
     f.render_widget(Paragraph::new(content).block(block).scroll((0, scroll)), area);
     if focused {
@@ -104,24 +174,32 @@ fn draw_input(f: &mut Frame, app: &mut App, area: Rect) {
     }
 }
 
+// ───────────────────────── プロファイル ─────────────────────────
+
 fn draw_profile(f: &mut Frame, app: &App, area: Rect) {
     let (pi, auto) = app.current_profile_idx();
     let p = &app.cfg.profiles[pi];
     let br = app.current_bitrate();
     let l1 = Line::from(vec![
-        Span::styled(" ▶ ", Style::new().fg(ACCENT)),
-        Span::styled(p.name.clone(), Style::new().fg(ACCENT).bold()),
-        Span::styled(if auto { " (自動)" } else { " (手動)" }, Style::new().fg(DIM)),
-        Span::raw("  "),
-        Span::styled(p.audio.summary(br), Style::new().fg(ACCENT2)),
-        if app.bitrate_override.is_some() { Span::styled("*", Style::new().fg(WARN)) } else { Span::raw("") },
-        Span::styled(format!("  {}", p.backend.label()), Style::new().fg(DIM)),
+        Span::styled("◈ ", Style::new().fg(ACCENT).bold()),
+        Span::styled(format!(" {} ", p.name), Style::new().fg(TEAL).bold().bg(SURFACE)),
+        Span::styled(if auto { " 自動" } else { " 手動" }, Style::new().fg(FAINT)),
+        Span::styled(format!("  {}", p.audio.summary(br)), Style::new().fg(BLUE)),
+        if app.bitrate_override.is_some() {
+            Span::styled(" *", Style::new().fg(YELLOW))
+        } else {
+            Span::raw(" ")
+        },
+        Span::styled(format!("  {}", p.backend.label()), Style::new().fg(FAINT)),
     ]);
-    let l2 = Line::styled(format!("   {}", p.description), Style::new().fg(DIM));
+    let l2 = Line::styled(format!("  {}", p.description), Style::new().fg(FAINT));
     f.render_widget(Paragraph::new(vec![l1, l2]), area);
 }
 
-fn progress_bar(pct: Option<f64>, width: usize) -> Vec<Span<'static>> {
+// ───────────────────────── 進捗バー ─────────────────────────
+
+/// 進捗バー (決定論: 不定進捗のアニメーションは tick フレームから算出)
+fn bar(pct: Option<f64>, width: usize, frame: u64) -> Vec<Span<'static>> {
     let width = width.max(4);
     match pct {
         Some(p) => {
@@ -129,43 +207,50 @@ fn progress_bar(pct: Option<f64>, width: usize) -> Vec<Span<'static>> {
             let filled = filled.min(width);
             vec![
                 Span::styled("█".repeat(filled), Style::new().fg(ACCENT)),
-                Span::styled("░".repeat(width - filled), Style::new().fg(DIM)),
+                Span::styled("░".repeat(width - filled), Style::new().fg(SURFACE)),
             ]
         }
         None => {
-            // 不定進捗: 流れるアニメーション
-            let t = (std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0)
-                / 150) as usize;
+            let t = (frame % width as u64) as usize;
             let s: String = (0..width)
-                .map(|i| if (i + width - t % width) % width < 3 { '▓' } else { '░' })
+                .map(|i| if (i + width - t) % width < 3 { '▓' } else { '░' })
                 .collect();
-            vec![Span::styled(s, Style::new().fg(ACCENT2))]
+            vec![Span::styled(s, Style::new().fg(BLUE))]
         }
     }
 }
+
+// ───────────────────────── ジョブラスト ─────────────────────────
 
 fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
     app.hit.jobs = area;
     let focused = app.mode == Mode::Normal;
     let done = app.jobs.iter().filter(|j| j.status == Status::Done).count();
+    let running = app.running_count();
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(if focused { ACCENT } else { DIM }))
+        .border_style(Style::new().fg(if focused { ACCENT } else { FAINT }))
         .title(Line::from(vec![
-            Span::styled(" ジョブ ", Style::new().bold()),
-            Span::styled(format!("{done}/{} ", app.jobs.len()), Style::new().fg(DIM)),
+            Span::styled(" ジョブ ", Style::new().fg(TEXT).bold()),
+            Span::styled(format!("{done}/{} 完了", app.jobs.len()), Style::new().fg(FAINT)),
+            if running > 0 {
+                Span::styled(format!("  ⇣{running} 実行中"), Style::new().fg(BLUE))
+            } else {
+                Span::raw("")
+            },
         ]));
     let inner_w = block.inner(area).width.saturating_sub(2) as usize; // ハイライト記号分
 
     if app.jobs.is_empty() {
         let help = vec![
-            Line::raw(""),
-            Line::styled(" URL を入力して Enter で開始", Style::new().fg(DIM)),
-            Line::styled(" 動画でも音声でも .opus で保存します", Style::new().fg(DIM)),
-            Line::styled(" ? でヘルプ / Tab でプロファイル切替", Style::new().fg(DIM)),
+            Line::raw(" "),
+            Line::from(vec![
+                Span::styled("  ♪", Style::new().fg(ACCENT).bold()),
+                Span::styled(" URL を貼り付けて Enter で開始", Style::new().fg(DIM)),
+            ]),
+            Line::styled("  動画でも音声でも .opus で保存します", Style::new().fg(FAINT)),
+            Line::raw(" "),
+            Line::styled("  ? ヘルプ · Tab プロファイル切替 · ^B 音質", Style::new().fg(FAINT)),
         ];
         f.render_widget(Paragraph::new(help).block(block), area);
         return;
@@ -177,21 +262,32 @@ fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|j| {
             let pname = &app.cfg.profiles[j.profile_idx].name;
-            let (icon_style, name_style) = match j.status {
-                Status::Done => (Style::new().fg(OK), Style::new()),
-                Status::Failed => (Style::new().fg(ERR), Style::new()),
-                Status::Canceled => (Style::new().fg(DIM), Style::new().fg(DIM)),
-                Status::Running => (Style::new().fg(ACCENT), Style::new().bold()),
-                Status::Queued => (Style::new().fg(DIM), Style::new()),
+            let (icon, icon_style) = match j.status {
+                Status::Queued => ("…".to_string(), Style::new().fg(FAINT)),
+                Status::Running => (spin(app.tick_count).to_string(), Style::new().fg(ACCENT)),
+                Status::Done => ("✔".to_string(), Style::new().fg(GREEN)),
+                Status::Failed => ("✖".to_string(), Style::new().fg(RED)),
+                Status::Canceled => ("■".to_string(), Style::new().fg(FAINT)),
+            };
+            let name_style = match j.status {
+                Status::Running => Style::new().fg(TEXT).bold(),
+                Status::Done => Style::new().fg(DIM),
+                Status::Failed => Style::new().fg(TEXT),
+                Status::Canceled => Style::new().fg(FAINT),
+                Status::Queued => Style::new().fg(DIM),
             };
             let l1 = Line::from(vec![
-                Span::styled(format!("{} ", j.status.icon()), icon_style),
-                Span::styled(format!("[{pname}] "), Style::new().fg(ACCENT2)),
+                Span::styled(format!("{icon} "), icon_style),
+                Span::styled(format!("[{pname}]"), Style::new().fg(TEAL)),
+                Span::styled(" ", Style::new()),
                 Span::styled(j.display_name().to_string(), name_style),
             ]);
             let l2 = match j.status {
                 Status::Running => {
-                    let pct_s = j.progress.map(|p| format!(" {p:5.1}%")).unwrap_or_else(|| "   --%".into());
+                    let pct_s = j
+                        .progress
+                        .map(|p| format!("{p:5.1}%"))
+                        .unwrap_or_else(|| "   --%".into());
                     let mut tail = format!(" {}", j.stage);
                     if !j.speed.is_empty() {
                         tail.push_str(&format!(" {}", j.speed));
@@ -202,8 +298,8 @@ fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
                     let tail_w = pct_s.width() + tail.width();
                     let bar_w = inner_w.saturating_sub(tail_w + 2).clamp(6, 40);
                     let mut spans = vec![Span::raw("  ")];
-                    spans.extend(progress_bar(j.progress, bar_w));
-                    spans.push(Span::styled(pct_s, Style::new().bold()));
+                    spans.extend(bar(j.progress, bar_w, app.tick_count));
+                    spans.push(Span::styled(pct_s, Style::new().fg(BLUE).bold()));
                     spans.push(Span::styled(tail, Style::new().fg(DIM)));
                     Line::from(spans)
                 }
@@ -213,19 +309,26 @@ fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
                         .first()
                         .map(|p| p.strip_prefix(&root).unwrap_or(p).display().to_string())
                         .unwrap_or_default();
-                    let more = if j.outputs.len() > 1 { format!(" ほか{}件", j.outputs.len() - 1) } else { String::new() };
-                    let el = j.elapsed_secs().map(|s| format!(" ({})", crate::runner::fmt_hms(s as f64))).unwrap_or_default();
+                    let more = if j.outputs.len() > 1 {
+                        format!(" +{}件", j.outputs.len() - 1)
+                    } else {
+                        String::new()
+                    };
+                    let el = j
+                        .elapsed_secs()
+                        .map(|s| format!(" ({})", crate::runner::fmt_hms(s as f64)))
+                        .unwrap_or_default();
                     Line::from(vec![
-                        Span::styled(format!("  → {first}"), Style::new().fg(OK)),
-                        Span::styled(format!("{more}{el}"), Style::new().fg(DIM)),
+                        Span::styled(format!(" → {first}"), Style::new().fg(GREEN)),
+                        Span::styled(format!("{more}{el}"), Style::new().fg(FAINT)),
                     ])
                 }
-                Status::Failed => Line::styled(
-                    format!("  {}", j.error.as_deref().unwrap_or("失敗").lines().next().unwrap_or("")),
-                    Style::new().fg(ERR),
-                ),
-                Status::Canceled => Line::styled("  キャンセル済み (r で再試行)", Style::new().fg(DIM)),
-                Status::Queued => Line::styled(format!("  待機中 · {}kbps", j.bitrate), Style::new().fg(DIM)),
+                Status::Failed => {
+                    let e = j.error.as_deref().unwrap_or("失敗").lines().next().unwrap_or("");
+                    Line::styled(format!("  {e}"), Style::new().fg(RED))
+                }
+                Status::Canceled => Line::styled("  キャンセル済み (r で再試行)", Style::new().fg(FAINT)),
+                Status::Queued => Line::styled(format!("  待機中 · {}kbps", j.bitrate), Style::new().fg(FAINT)),
             };
             ListItem::new(Text::from(vec![l1, l2]))
         })
@@ -233,8 +336,8 @@ fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items)
         .block(block)
-        .highlight_symbol("▌ ")
-        .highlight_style(Style::new().bg(Color::Rgb(45, 35, 55)));
+        .highlight_symbol("▸ ")
+        .highlight_style(Style::new().bg(SURFACE_HI));
     let mut state = ListState::default().with_selected(Some(app.selected.min(app.jobs.len() - 1)));
     // 前回のオフセットを維持してスクロールがガタつかないようにする
     *state.offset_mut() = app.hit.jobs_offset;
@@ -242,34 +345,39 @@ fn draw_jobs(f: &mut Frame, app: &mut App, area: Rect) {
     app.hit.jobs_offset = state.offset();
 }
 
+// ───────────────────────── ログ ─────────────────────────
+
 fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
     app.hit.log = area;
     let Some(job) = app.jobs.get(app.selected) else { return };
-    let mut lines: Vec<Line> = Vec::new();
-    lines.push(Line::styled(job.url.clone(), Style::new().fg(ACCENT2)));
+    let pname = &app.cfg.profiles[job.profile_idx].name;
+    let mut lines: Vec<Line> = vec![Line::from(vec![
+        Span::styled(format!("[{pname}] "), Style::new().fg(TEAL)),
+        Span::styled(job.url.clone(), Style::new().fg(DIM)),
+    ])];
     for o in &job.outputs {
-        lines.push(Line::styled(format!("→ {}", o.display()), Style::new().fg(OK)));
+        lines.push(Line::styled(format!("→ {}", o.display()), Style::new().fg(GREEN)));
     }
     for l in &job.logs {
         let style = if l.starts_with("ERROR") || l.starts_with('✖') {
-            Style::new().fg(ERR)
+            Style::new().fg(RED)
         } else if l.starts_with("WARNING") || l.starts_with('⚠') {
-            Style::new().fg(WARN)
+            Style::new().fg(YELLOW)
         } else if l.starts_with('✔') || l.starts_with("保存") {
-            Style::new().fg(OK)
+            Style::new().fg(GREEN)
         } else {
-            Style::new().fg(Color::Gray)
+            Style::new().fg(DIM)
         };
         lines.push(Line::styled(l.clone(), style));
     }
     let block = Block::new()
         .borders(Borders::TOP)
-        .border_style(Style::new().fg(DIM))
+        .border_style(Style::new().fg(FAINT))
         .title(Line::from(vec![
-            Span::styled(format!(" ログ #{} ", job.id), Style::new().bold()),
+            Span::styled(format!(" ログ #{} ", job.id), Style::new().fg(TEXT).bold()),
             Span::styled(
                 if app.log_scroll > 0 { format!("↑{} ", app.log_scroll) } else { String::new() },
-                Style::new().fg(WARN),
+                Style::new().fg(YELLOW),
             ),
         ]));
     let inner = block.inner(area);
@@ -283,28 +391,63 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(para.block(block).scroll((y, 0)), area);
 }
 
+// ───────────────────────── フッタ (ステータスバー) ─────────────────────────
+
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
+    let w = area.width as usize;
     if let Some((msg, _)) = &app.status_msg {
-        f.render_widget(
-            Paragraph::new(Line::styled(format!(" {msg}"), Style::new().fg(WARN))).wrap(Wrap { trim: true }),
-            area,
-        );
+        let line = Line::from(vec![
+            Span::styled(" ⚠ ", Style::new().fg(YELLOW).bold()),
+            Span::styled(msg.as_str(), Style::new().fg(YELLOW)),
+        ]);
+        f.render_widget(Paragraph::new(line).wrap(Wrap { trim: true }), area);
         return;
     }
-    let key = |k: &str| Span::styled(k.to_string(), Style::new().fg(Color::Black).bg(ACCENT2));
-    let txt = |t: &str| Span::styled(format!("{t} "), Style::new().fg(DIM));
-    let spans = match app.mode {
+    let key = |k: &str| Span::styled(format!(" {k} "), Style::new().fg(TEXT).bg(SURFACE));
+    let txt = |t: &str| Span::styled(format!(" {t} "), Style::new().fg(DIM).bg(BG_ALT));
+    let mut spans = match app.mode {
         Mode::Input => vec![
-            key("Enter"), txt("追加"), key("Tab"), txt("プロファイル"), key("^B"), txt("音質"),
-            key("Esc"), txt("一覧"), key("F1"), txt("ヘルプ"),
+            key("Enter"),
+            txt("追加"),
+            key("Tab"),
+            txt("プロファイル"),
+            key("^B"),
+            txt("音質"),
+            key("Esc"),
+            txt("一覧"),
+            key("F1"),
+            txt("ヘルプ"),
         ],
         _ => vec![
-            key("↑↓"), txt("選択"), key("i"), txt("入力"), key("c"), txt("中止"), key("r"), txt("再試行"),
-            key("o"), txt("再生"), key("l"), txt("ログ"), key("p"), txt("プロファイル"), key("?"), txt(""), key("q"), txt("終了"),
+            key("↑↓"),
+            txt("選択"),
+            key("i"),
+            txt("入力"),
+            key("c"),
+            txt("中止"),
+            key("r"),
+            txt("再試行"),
+            key("o"),
+            txt("再生"),
+            key("l"),
+            txt("ログ"),
+            key("p"),
+            txt("プロファイル"),
+            key("q"),
+            txt("終了"),
         ],
     };
+    // 広い画面では右端までバーの背景を伸ばす (縦画面はラップで 2 行になる)
+    if area.width >= 70 {
+        let used = spans_width(&spans);
+        if used < w {
+            spans.push(Span::styled(" ".repeat(w - used), Style::new().bg(BG_ALT)));
+        }
+    }
     f.render_widget(Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }), area);
 }
+
+// ───────────────────────── ポップアップ ─────────────────────────
 
 fn popup_area(area: Rect, w_pct: u16, h: u16) -> Rect {
     // スマホ縦画面では全幅にする (全角文字が枠にかかって表示が崩れるのを防ぐ)
@@ -327,27 +470,34 @@ fn draw_picker(f: &mut Frame, app: &App, area: Rect) {
     let r = popup_area(area, 92, (n as u16) * 2 + 2);
     f.render_widget(Clear, r);
     let mut items = vec![ListItem::new(Text::from(vec![
-        Line::styled("自動判定", Style::new().bold()),
-        Line::styled("  URL のドメインから選択", Style::new().fg(DIM)),
+        Line::styled(" 自動判定", Style::new().fg(TEXT).bold()),
+        Line::styled("   URL のドメインから選択", Style::new().fg(FAINT)),
     ]))];
     for p in &app.cfg.profiles {
         items.push(ListItem::new(Text::from(vec![
             Line::from(vec![
-                Span::styled(p.name.clone(), Style::new().bold().fg(ACCENT)),
-                Span::styled(format!("  {}", p.audio.summary(p.audio.bitrate_kbps)), Style::new().fg(ACCENT2)),
+                Span::styled(format!(" {} ", p.name), Style::new().fg(TEAL).bold().bg(SURFACE)),
+                Span::styled(
+                    format!("  {}", p.audio.summary(p.audio.bitrate_kbps)),
+                    Style::new().fg(BLUE),
+                ),
             ]),
-            Line::styled(format!("  {}", p.description), Style::new().fg(DIM)),
+            Line::styled(format!("  {}", p.description), Style::new().fg(FAINT)),
         ])));
     }
     let list = List::new(items)
         .block(
             Block::bordered()
-                .border_type(BorderType::Double)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::new().fg(ACCENT))
-                .title(" プロファイル選択 (Enter/Esc) "),
+                .title(Line::from(vec![
+                    Span::styled(" プロファイル", Style::new().fg(ACCENT).bold()),
+                    Span::styled("  Enter=決定 / Esc=戻る", Style::new().fg(FAINT)),
+                ])),
         )
-        .highlight_symbol("▶ ")
-        .highlight_style(Style::new().bg(Color::Rgb(45, 35, 55)).add_modifier(Modifier::BOLD));
+        .style(Style::new().bg(BG))
+        .highlight_symbol("▸ ")
+        .highlight_style(Style::new().bg(SURFACE_HI).add_modifier(Modifier::BOLD));
     let mut st = ListState::default().with_selected(Some(app.picker_idx));
     f.render_stateful_widget(list, r, &mut st);
 }
@@ -355,19 +505,25 @@ fn draw_picker(f: &mut Frame, app: &App, area: Rect) {
 fn draw_help(f: &mut Frame, app: &App, area: Rect) {
     let r = popup_area(area, 94, area.height.saturating_sub(2));
     f.render_widget(Clear, r);
-    let k = |s: &str| Span::styled(format!("{s:<10}"), Style::new().fg(ACCENT2).bold());
+    let k = |s: &str| Span::styled(format!("{s:<10}"), Style::new().fg(BLUE).bold());
     let row = |key: &str, desc: &str| Line::from(vec![k(key), Span::raw(desc.to_string())]);
+    let env_row = |name: &str, value: String| {
+        Line::from(vec![
+            Span::styled(format!("{name:<7}"), Style::new().fg(FAINT)),
+            Span::styled(value, Style::new().fg(TEXT)),
+        ])
+    };
     let t = &app.tools;
     let mut lines = vec![
-        Line::styled("■ 入力モード", Style::new().fg(ACCENT).bold()),
+        Line::styled(" ■ 入力モード", Style::new().fg(ACCENT).bold()),
         row("Enter", "URLをキューに追加 (複数URL可)"),
         row("Tab", "プロファイル切替 (自動→各サイト)"),
         row("Ctrl+P/F2", "プロファイル一覧から選択"),
         row("Ctrl+B", "ビットレート切替"),
         row("Ctrl+U/W", "全消去 / 1語消去"),
         row("Esc / ↓", "ジョブ一覧へ"),
-        Line::raw(""),
-        Line::styled("■ 一覧モード", Style::new().fg(ACCENT).bold()),
+        Line::raw(" "),
+        Line::styled(" ■ 一覧モード", Style::new().fg(ACCENT).bold()),
         row("↑↓ / jk", "選択 (タップでも可)"),
         row("Enter / l", "ログ表示切替"),
         row("PgUp/PgDn", "ログスクロール (スワイプ可)"),
@@ -377,23 +533,44 @@ fn draw_help(f: &mut Frame, app: &App, area: Rect) {
         row("o", "完了ファイルを Android アプリで開く"),
         row("i / Esc", "入力モードへ"),
         row("q", "終了"),
-        Line::raw(""),
-        Line::styled("■ 環境", Style::new().fg(ACCENT).bold()),
-        Line::raw(format!("yt-dlp : {}", t.ytdlp.as_deref().unwrap_or("未検出 → pip install -U \"yt-dlp[default]\""))),
-        Line::raw(format!("ffmpeg : {}", t.ffmpeg.as_deref().unwrap_or("未検出 → pkg install ffmpeg"))),
-        Line::raw(format!("libopus: {}", if t.libopus { "OK" } else { "なし/未確認" })),
-        Line::raw(format!("設定   : {}", app.config_path.display())),
-        Line::raw(format!("出力先 : {}", app.cfg.output_root().display())),
-        Line::raw(""),
-        Line::styled("何かキーを押すと閉じます", Style::new().fg(DIM)),
+        Line::raw(" "),
+        Line::styled(" ■ 環境", Style::new().fg(ACCENT).bold()),
+        env_row(
+            "yt-dlp:",
+            t.ytdlp
+                .clone()
+                .unwrap_or_else(|| "未検出 → pip install -U \"yt-dlp[default]\"".into()),
+        ),
+        env_row(
+            "ffmpeg:",
+            t.ffmpeg
+                .clone()
+                .unwrap_or_else(|| "未検出 → pkg install ffmpeg".into()),
+        ),
+        env_row("libopus", if t.libopus { "OK".into() } else { "なし/未確認".into() }),
+        env_row("設定", app.config_path.display().to_string()),
+        env_row("出力先", app.cfg.output_root().display().to_string()),
+        Line::raw(" "),
+        Line::styled("何かキーを押すと閉じます", Style::new().fg(FAINT)),
     ];
     if t.ytdlp.is_none() || t.ffmpeg.is_none() {
-        lines.insert(0, Line::styled("⚠ 必要なツールが不足しています (下の環境欄参照)", Style::new().fg(ERR).bold()));
+        lines.insert(
+            0,
+            Line::styled("⚠ 必要なツールが不足しています (下の環境欄参照)", Style::new().fg(RED).bold()),
+        );
     }
     f.render_widget(
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
-            .block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(ACCENT)).title(" ヘルプ ")),
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::new().fg(ACCENT))
+                    .title(Line::from(vec![Span::styled(
+                        " ヘルプ",
+                        Style::new().fg(ACCENT).bold(),
+                    )])),
+            ),
         r,
     );
 }
@@ -403,11 +580,22 @@ fn draw_confirm(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Clear, r);
     f.render_widget(
         Paragraph::new(vec![
-            Line::raw(format!("実行中のジョブが {} 件あります。", app.running_count())),
-            Line::styled("中止して終了しますか? (y / n)", Style::new().fg(WARN).bold()),
+            Line::styled(
+                format!("  実行中のジョブが {} 件あります。", app.running_count()),
+                Style::new().fg(TEXT),
+            ),
+            Line::styled("  中止して終了しますか? (y / n)", Style::new().fg(YELLOW).bold()),
         ])
         .wrap(Wrap { trim: true })
-        .block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(ERR)).title(" 終了確認 ")),
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::new().fg(RED))
+                .title(Line::from(vec![Span::styled(
+                    " 終了確認",
+                    Style::new().fg(RED).bold(),
+                )])),
+        ),
         r,
     );
 }

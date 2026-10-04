@@ -74,7 +74,7 @@ media_scan = true   # 完了時に termux-media-scan（既定: true）
 
 1. 充電を接続
 2. 第2節のバッテリー最適化除外を**毎回確認**（Android の更新でリセットされる場合がある）
-3. `asmr-dl` を起動 → 画面右上 `battery: N%`（`termux-battery-status` 連携）
+3. `asmr-dl` を起動（ヘッダに `⇣実行中 · N 待機` 表示。バッテリー%は非表示）
 4. URL を貼り付け（複数可）→ Enter
 5. 画面を消して**充電だけ**放置
 6. 完了時に通知（`notify = true`）

@@ -17,9 +17,10 @@
 |---|---|---|---|
 | `_TEMPLATE.md` | — | 現用 | 新規計画書の必須形式 |
 | `index.md` | — | 現用 | フォルダ説明 |
+| `UI_MODERN_TUI_PLAN.md` | UI-1 | 実装中 | TUI のモダンデザイン刷新（Catppuccin Mocha） |
 | `complete/README.md` | — | 現用 | 完了済み計画の索引 |
 
-> 現時点で進行中の計画書はありません（`task-list.md` の INIT-1/INIT-2 は完了、CI-1/DEV-1 は未着手）。
+> 進行中: UI-1（実装済み、検証待ち — Sandbox に Rust ツールチェーン無し §6.2）。INIT-1/INIT-2 は完了、CI-1/DEV-1 は未着手。
 
 ## 次に着手可能なタスク
 

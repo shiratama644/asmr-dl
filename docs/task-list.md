@@ -27,7 +27,7 @@
 
 | ID | 状態 | 残作業 |
 |---|---|---|
-| — | — | なし |
+| UI-1 | 実装中 | cargo build/test（Sandbox 制約 §6.2 により未実行）+ 実機でのレイアウト確認（縦 40/60 桁、D1〜D23 の UI 系） |
 
 ---
 
@@ -42,6 +42,12 @@
 |---|---|---|---:|---|---|---|
 | INIT-1 | asmr-dl.zip を解凍しルートディレクトリへ配置（src/ / scripts/ / Cargo.toml / Cargo.lock / config.default.toml） | 完了 | 100% | — | 1. zip 内のソースがルートに展開されている 2. 既存 .gitignore と競合しない（`target` 重複は許容） 3. asmr-dl.zip 自体は保持 | コミット: リポジトリ整備のコミット / 確認: `ls src/ scripts/ Cargo.toml config.default.toml` |
 | INIT-2 | TEMPLATE_REPO の .agent/ / docs/ / AGENTS.md / README.md を asmr-dl 向けに書き換え適用 | 完了 | 100% | INIT-1 | 1. .agent/ が公式 .claude/ 構成に準拠（settings.json/rules/skills/agents/hooks/commands/output-styles/workflows/logs） 2. docs/ が arch/ + planning/ + research/ + audit/ + ops/ + examples/ + task-list.md 構成 3. AGENTS.md §6 が asmr-dl 固有（Rust/Termux/Sandbox §6.2） 4. README.md が asmr-dl のセットアップ・使い方 5. 代替検証全PASS（toml / sh -n / links / jq） 6. 完了ログ作成（.agent/logs/） | 検証: config.default.toml tomllib OK / scripts sh -n OK / docs links OK / settings.json jq OK / cargo build/test 未実行（§6.2: Sandbox に Rust ツールチェーン無し） |
+
+### UI/UX (2026-10-04)
+
+| ID | タスク | 状態 | 進捗 | 依存 | 完了条件 | 証拠 |
+|---|---|---|---:|---|---|---|
+| UI-1 | TUI を ratatui のモダンデザインに刷新（Catppuccin Mocha パレット / 角丸 / chrome バー / スピナー） | 実装中 | 90% | — | 1. `src/ui.rs` 全面書き換え（パレット・ヘッダ/フッタバー・ジョブラスト・ポップアップ） 2. `App.tick_count` による決定論的アニメーション 3. cargo build/test PASS（Sandbox 外） 4. 実機で縦 40/60 桁のレイアウト崩れなし（device-testing D1〜D23 の UI 系） | コード: `src/ui.rs`（25.6KB）/ `src/app.rs`（tick_count 追加）/ 計画: `docs/planning/UI_MODERN_TUI_PLAN.md` / build/test 未実行（§6.2: Sandbox に Rust ツールチェーン無し） |
 
 ### 品質・CI (将来の候補)
 

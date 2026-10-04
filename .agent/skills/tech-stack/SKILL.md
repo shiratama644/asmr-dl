@@ -67,6 +67,18 @@ panic = "unwind"
 - **`-reconnect` フラグ**: ffmpeg 直接経路で m3u8/mpd 以外に付ける（`src/runner.rs::convert_with_info`）。m3u8 に付けると HLS の再取得が狂う。
 - **トランスコード後検証**: 出力を再度 ffprobe し、入力の 90% 未満（-1秒許容）なら「途中で切れている」として失敗にする（`src/runner.rs::convert_with_info`）。このガードを外さない。
 
+## ratatui 0.30 の描画 API（UI 変更時に確認済み）
+
+> 2026-10-04 の UI 刷新（UI-1）で docs.rs に照合して使用した API。新規 UI コードも同じ前提で。
+
+- **非推奨を避ける**: `Paragraph::style` は非推奨/削除の履歴があるため使わない。全幅の背景バーは**スパンに bg を付けて幅を `unicode-width` で埋める**（`ui.rs::spans_width` のパターン）。
+- **背景塗りの正攻法**: ポップアップの中身を `BG` で塗りたければ `List::style(Style::new().bg(BG))`（0.30 で実在・公式例にも出ている）。`Block::style` は**枠リング部分**の style であり中身は塗られない。
+- **タイトル**: `Block::title(Line)` に styled spans を渡す（右寄せタイトルは `Title::position` 系を 0.30 で確認してから使う）。
+- **カーソル**: `f.set_cursor_position((x, y))`（旧 `set_cursor` は非推奨）。
+- **ハイライト**: `List::highlight_symbol("▸ ")` + `highlight_style`。複数行アイテムでは記号は先頭行のみ（`repeat_highlight_symbol` 既定 false）。`app.rs` のマウス行計算（1 ジョブ=2 行）はこの前提に依存する。
+- **フレーム更新**: 描画ループは 200ms tick 駆動（`main.rs`）。アニメーションは `App.tick_count` からフレームを算出する（`SystemTime` を直接使うと tick と位相がズレる / 決定論が壊れる — `determinism` スキル参照）。
+- **縦画面の罠**: 幅 40 桁では全角文字の桁数が倍なので、chrome 要素（ヘッダのツール名等）は幅に応じて短縮する（`ui.rs::draw_header` の `w < 60` 分岐）。
+
 ## Termux ビルド
 
 ```bash

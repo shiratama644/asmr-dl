@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-10-04 TUI モダンデザイン刷新 (UI-1)
+
+- **内容**: `src/ui.rs` を全面書き換えし、Catppuccin Mocha ベースのモダンテーマに刷新。`src/app.rs` に `tick_count: u64` を追加（スピナー等のアニメーションフレーム用 / `on_tick` で +1）。
+- **変更点**: 13 色パレット（`mod theme`）/ ヘッダ・フッタの `BG_ALT` 全幅バー / 角丸枠 / プロファイル名チップ（surface 背景）/ 実行中ジョブのブレイル・スピナー（200ms tick 連動・決定論）/ 進捗バー（accent + surface）/ 選択行 `▸ ` + surface1 / ポップアップは BG 塗り + 角丸。キー操作・画面構成・HitAreas 機構は不変。
+- **根拠**: ユーザー指示「ratauiを使ったよりきれいでモダンなデザインにしてください」。
+- **結果**: `cargo build/test` 未実行（§6.2: Sandbox の Rust egress 制約）。代替検証（構文バランス / ratatui 0.30 API 照合）のみ実施。
+- **結論**: 要確認（実機・開発機でのビルド + 縦 40/60 桁のレイアウト確認が完了条件の残項目。計画: `docs/planning/UI_MODERN_TUI_PLAN.md`）
+
+---
+
 ## 2026-10-04 TEMPLATE_REPO 適用（リポジトリ整備）
 
 - **内容**: `shiratama644/TEMPLATE_REPO`（TS 製テンプレート）の `.agent/` / `docs/` / `AGENTS.md` / `README.md` を本リポジトリに導入し、**asmr-dl（Rust / Termux）向けに全面書き換え**した。
@@ -22,7 +32,7 @@
 
 ## 2026-10-04 v0.1.0 時点の機能棚卸し
 
-- **内容**: `src/main.rs`（1237）/ `config.rs`（790）/ `runner.rs`（1027）/ `ui.rs`（1374）/ `job.rs` / `app.rs` / `cli.rs` / `util.rs` / `main_ui.rs` の機能整理
+- **内容**: `src/` の全6ファイル（`main.rs` / `app.rs` / `ui.rs` / `runner.rs` / `config.rs` / `job.rs` ※本リポジトリにはこれ以外のソースファイルは存在しない。当初記録の `cli.rs` / `util.rs` / `main_ui.rs` は誤りとして訂正）の機能整理
 - **根拠**: ソースコード直接の読み取り
 - **結果**: 取得（yt-dlp / ffmpeg 直接 / auto 2段構え）/ 変換（Opus / 無劣化コピー / loudnorm 任意）/ TUI（7画面）/ 制御（キュー / キャンセル / process group kill）/ Termux 連携（wake-lock / 通知 / media-scan / termux-open）を確定
 - **結論**: 採用（`docs/arch/*.md` に反映済み）

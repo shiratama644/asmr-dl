@@ -59,6 +59,8 @@ pub struct App {
     pub should_quit: bool,
     pub tools: ToolStatus,
     pub hit: HitAreas,
+    /// tick 回数 (UI のスピナー等のアニメーションフレームに使用 / 200ms ごとに +1)
+    pub tick_count: u64,
 }
 
 impl App {
@@ -82,6 +84,7 @@ impl App {
             should_quit: false,
             tools: ToolStatus::default(),
             hit: HitAreas::default(),
+            tick_count: 0,
         }
     }
 
@@ -284,6 +287,7 @@ impl App {
     }
 
     pub fn on_tick(&mut self) {
+        self.tick_count += 1;
         if let Some((_, t)) = &self.status_msg {
             if t.elapsed() > Duration::from_secs(4) {
                 self.status_msg = None;

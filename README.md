@@ -4,21 +4,23 @@ URL を入れると、そのページの **動画・音声（HLS/m3u8、DASH/mpd
 ASMR 向けのサイト別プロファイル付きで、**Termux（Galaxy S24 Ultra）** での利用を想定して作っています。
 
 ```
- ♪ ASMR→Opus  yt-dlp✓ ffmpeg✓ opus✓  ⇣2 …1
-╭ URL Enter=追加 ────────────────────────╮
-│https://youtu.be/xxxxxxxx               │
-╰────────────────────────────────────────╯
- ▶ youtube (自動)  160k ch維持 opus→copy
-   YouTube / YouTube Music。Opus(251)を優先
-╭ ジョブ 1/3 ────────────────────────────╮
-│  ✔ [youtube] 【耳かき】安眠ASMR         │
-│    → YouTube/ch/【耳かき】安眠ASMR.opus │
-│▌ ⇣ [niconico] 囁き雑談 2時間            │
-│    ██████░░░░  58.2% DL 4.1MiB/s 残01:12│
-│  … [hls-direct] index                   │
-│    待機中 · 128kbps                     │
-╰────────────────────────────────────────╯
+ ♪ ASMR→Opus │ yt-dlp✓ ffmpeg✓ opus✓ │ ⇣1 · 1 待機
+╭ URL  Enter=追加 · Esc=一覧 ──────────╮
+│ https://youtu.be/xxxxxxxx            │
+╰──────────────────────────────────────╯
+◈  youtube 自動  160k ch維持 opus→copy  auto
+  YouTube / YouTube Music。Opus(251)を優先
+╭ ジョブ  1/3 完了  ⇣1 実行中 ──────────╮
+│  ✔ [youtube] 【耳かき】安眠ASMR       │
+│   → YouTube/ch/【耳かき】安眠ASMR.opus│
+│▸ ⠸ [niconico] 囁き雑談 2時間          │
+│   ██████░░░░ 58.2% 転換中 4.1MiB/s 残 │
+│  … [hls-direct] index                 │
+│   待機中 · 128kbps                    │
+╰──────────────────────────────────────╯
 ```
+
+> UI は Catppuccin Mocha ベースのダークテーマ（角丸枠・ヘッダ/フッタのステータスバー・実行中ジョブは回転スピナー表示）。
 
 ## 特徴
 
